@@ -1,8 +1,13 @@
 # 🌑 Shadow Nirikshan Engine
 
-**Shadow Nirikshan Engine** is an AI-driven sustainability **decision support system**
+**Shadow Nirikshan Engine** is a data-driven sustainability **decision support system**
 designed to detect *invisible water and electricity waste* that occurs during
 **periods of inactivity**.
+
+<p align="center">
+  <img src="assets/hero.png" alt="Shadow Nirikshan Engine Banner" width="800"/>
+</p>
+
 
 Built for **EXECUTE 5.0 Hackathon 2026**  
 Theme: *Innovation for Sustainable Development*  
@@ -99,3 +104,12 @@ To run one complete **analysis cycle** from the terminal:
 
 ```bash
 /usr/bin/python3 test_ingestion.py
+```
+
+## 🌍 Live Demo
+
+👉 **Streamlit App:**  
+https://shadow-nirikshan-engine.streamlit.app/
+
+*(The demo simulates a scheduled analysis cycle and displays detected shadow waste with actionable recommendations.)*
+

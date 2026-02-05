@@ -1,0 +1,4 @@
+building,start_time,end_time,expected_activity
+Lab-A,09:00,18:00,YES
+Lab-A,18:00,09:00,NO
+Library,22:00,06:00,NO

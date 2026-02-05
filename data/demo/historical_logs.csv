@@ -1,0 +1,9 @@
+timestamp,building,resource,usage
+2026-02-01 01:30,Lab-A,water,300
+2026-02-02 01:30,Lab-A,water,280
+2026-02-03 01:30,Lab-A,water,310
+2026-02-01 01:30,Lab-A,electricity,5
+2026-02-02 01:30,Lab-A,electricity,6
+2026-02-03 01:30,Lab-A,electricity,5
+2026-02-01 01:30,Library,electricity,4
+2026-02-02 01:30,Library,electricity,4

@@ -52,44 +52,15 @@ Shadow Nirikshan Engine is a **scheduled analysis engine** that:
 3. Learns **normal silence behavior** from historical data
 4. Detects abnormal usage during inactivity
 5. Generates **actionable decisions**, not just alerts
-6. Adds **human validation and policy simulation layers**
+6. Adds **staff accountability, policy simulation, and human validation layers**
 
 It is a **decision support system**, not just a monitoring dashboard.
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ System Architecture (Single-Line Flow)
 
-Raw Data
-
-↓
-
-Schedule & Silence Window Detection
-
-↓
-
-Baseline Learning (ML / Statistical)
-
-↓
-
-Shadow Waste Detection
-
-↓
-
-Decision Generation
-
-↓
-
-Staff Responsibility Mapping
-
-↓
-
-Policy Simulation Engine
-
-↓
-
-Admin Review & Validation Layer
-
+**Raw Data → Silence Window Detection → Baseline Learning (ML / Mean) → Shadow Waste Detection → Decision Generation → Staff Mapping → Policy Simulation → Admin Review Layer**
 
 ---
 
@@ -120,6 +91,7 @@ Designed specifically for **real Indian campuses** where data may be delayed, ma
 - 🟥 False-alarm highlighting in anomaly tables
 - 🥧 Review-aware pie charts and analytics
 - 💰 Cost and CO₂ impact estimation
+- 🔄 Baseline-mode auto-reset simulation
 - 🧩 Modular pipeline architecture
 - 📊 Interactive Streamlit dashboard
 

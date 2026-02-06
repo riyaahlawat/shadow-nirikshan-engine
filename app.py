@@ -15,6 +15,12 @@ from pipeline.baseline import compute_silence_baseline
 from pipeline.anomaly import detect_shadow_waste
 from pipeline.decision import generate_decision
 
+WATER_COST_PER_UNIT = 0.05
+ELECTRIC_COST_PER_UNIT = 8.0
+
+if "admin_feedback" not in st.session_state:
+    st.session_state.admin_feedback = {}
+
 
 # ============================================================
 # Page config
@@ -114,6 +120,15 @@ if "show_policy_panel" not in st.session_state:
 
 if st.sidebar.button("🏛️ Policy Simulation"):
     st.session_state.show_policy_panel = not st.session_state.show_policy_panel
+
+
+if "show_feedback_panel" not in st.session_state:
+    st.session_state.show_feedback_panel = False
+
+if st.sidebar.button("🧾 Admin Feedback"):
+    st.session_state.show_feedback_panel = (
+        not st.session_state.show_feedback_panel
+    )
 
 
 # ============================================================
@@ -233,14 +248,19 @@ if run_one_day:
 # ============================================================
 # Results & Analytics
 # ============================================================
+st.header("🏛️ Shadow Waste Results")
+with st.expander("📊 Collapsable Results", expanded=False):
 
-st.header("📊 Shadow Waste Results")
+    if not st.session_state.decision_history:
+        st.info("Run one or more cycles to view results.")
+        st.stop()
 
-if not st.session_state.decision_history:
-    st.info("Run one or more cycles to view simulation results.")
-else:
-    # everything related to simulation results
+    if not st.session_state.anomaly_history:
+        st.info("Run one or more cycles to view results.")
+        st.stop()
+
     decision_df = pd.DataFrame(st.session_state.decision_history)
+
 
 
     # ---------------- KPI Metrics ----------------
@@ -351,18 +371,36 @@ if st.session_state.show_staff_panel:
                 anomaly_all["usage"] - anomaly_all["baseline_usage"]
             ).clip(lower=0)
 
+            anomaly_all["waste_cost"] = anomaly_all.apply(
+                lambda r: r["excess_usage"] * (
+                    WATER_COST_PER_UNIT
+                    if r["resource"] == "water"
+                    else ELECTRIC_COST_PER_UNIT
+                ),
+                axis=1
+            )
+
+
             staff_summary = (
                 anomaly_all
                 .groupby(
-                    ["staff_name", "staff_role", "staff_phone", "building"]
+                    [
+                        "staff_name",
+                        "staff_role",
+                        "staff_phone",
+                        "building",
+                        "resource"
+                    ]
                 )
                 .agg(
                     anomaly_count=("usage", "count"),
-                    total_excess_usage=("excess_usage", "sum")
+                    total_excess_usage=("excess_usage", "sum"),
+                    total_cost=("waste_cost", "sum")
                 )
                 .reset_index()
-                .sort_values("total_excess_usage", ascending=False)
+                .sort_values("total_cost", ascending=False)
             )
+
 
             st.subheader("📋 Staff Accountability Table")
             st.dataframe(staff_summary, use_container_width=True)
@@ -500,3 +538,52 @@ if st.session_state.show_policy_panel:
         c6.metric("⚡ Electric Anomalies", electric_anomalies)
         # c7.metric("🚫 Total Silence Anomalies", preventable_events)
 
+# ============================================================
+# Admin Feedback Panel
+# ============================================================
+st.divider()
+st.header("🧾 Admin Anomaly Feedback")
+st.info("Admins can mark anomalies as true waste or false alarms to validate system decisions.")
+
+
+if st.session_state.show_feedback_panel:
+
+    if not st.session_state.anomaly_history:
+        st.info("Run anomaly cycles first.")
+    else:
+
+        anomaly_all = pd.concat(st.session_state.anomaly_history)
+
+        anomaly_rows = anomaly_all[
+            anomaly_all["is_anomaly"] == True
+        ].copy()
+
+        if anomaly_rows.empty:
+            st.success("No anomalies detected.")
+        else:
+
+            feedback_updates = {}
+
+            for idx, row in anomaly_rows.iterrows():
+
+                anomaly_id = (
+                    f"{row['timestamp']}_"
+                    f"{row['building']}_"
+                    f"{row['resource']}"
+                )
+
+                label = st.selectbox(
+                    f"{row['timestamp']} | {row['building']} | {row['resource']}",
+                    ["Unreviewed", "True Waste", "False Alarm"],
+                    key=f"fb_{anomaly_id}"
+                )
+
+                feedback_updates[anomaly_id] = label
+
+            if st.button("💾 Save Feedback"):
+
+                st.session_state.admin_feedback.update(
+                    feedback_updates
+                )
+
+                st.success("Feedback saved.")

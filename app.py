@@ -24,6 +24,26 @@ if "admin_feedback" not in st.session_state:
 if "feedback_submitted" not in st.session_state:
     st.session_state.feedback_submitted = False
 
+# ============================================================
+# Attach Admin Review Column
+# ============================================================
+
+def attach_admin_review(df):
+    if df is None or df.empty:
+        return df
+
+    df = df.copy()
+
+    def make_id(r):
+        return f"{r['timestamp']}_{r['building']}_{r['resource']}"
+
+    df["anomaly_id"] = df.apply(make_id, axis=1)
+
+    df["admin_review"] = df["anomaly_id"].map(
+        lambda x: st.session_state.admin_feedback.get(x, "Unreviewed")
+    )
+
+    return df
 
 
 # ============================================================
@@ -45,6 +65,8 @@ st.markdown(
 )
 
 st.divider()
+st.divider()
+
 
 
 # ============================================================
@@ -362,6 +384,28 @@ with st.expander("📊 Collapsable Results", expanded=False):
         st.stop()
 
     decision_df = pd.DataFrame(st.session_state.decision_history)
+    # ---------------- Raw Anomaly Table (with Admin Review) ----------------
+
+    st.subheader("🚨 Detected Anomalies (With Admin Review)")
+
+    anomaly_all = pd.concat(st.session_state.anomaly_history)
+    anomaly_all = anomaly_all[anomaly_all["is_anomaly"] == True]
+
+    anomaly_all = attach_admin_review(anomaly_all)
+
+    def highlight_false_alarm(row):
+        if row["admin_review"] == "False Alarm":
+            return ["background-color: #ffcccc"] * len(row)
+        return [""] * len(row)
+
+    anomaly_all_display = anomaly_all.reset_index(drop=True)
+
+    st.dataframe(
+        anomaly_all_display.style.apply(highlight_false_alarm, axis=1),
+        use_container_width=True
+    )
+
+
 
 
 
@@ -380,8 +424,8 @@ with st.expander("📊 Collapsable Results", expanded=False):
 
 
     # ---------------- Decision Table ----------------
-    st.subheader("📋 All Shadow Waste Decisions")
-    st.dataframe(decision_df, use_container_width=True)
+    # st.subheader("📋 All Shadow Waste Decisions")
+    # st.dataframe(decision_df, use_container_width=True)
 
 
     # ---------------- Graphs ----------------
@@ -672,7 +716,7 @@ st.header("🧾 Admin Anomaly Feedback")
 st.info("Admins can mark anomalies as true waste or false alarms to validate system decisions.")
 
 
-if st.session_state.show_feedback_panel and not st.session_state.feedback_submitted:
+if st.session_state.show_feedback_panel:
 
     if not st.session_state.anomaly_history:
         st.info("Run anomaly cycles first.")
@@ -711,5 +755,5 @@ if st.session_state.show_feedback_panel and not st.session_state.feedback_submit
                 st.session_state.admin_feedback.update(feedback_updates)
                 st.session_state.feedback_submitted = True
 
-                st.success("Feedback saved. Table hidden.")
+                st.success("Feedback saved. Table updated.")
                 st.rerun()

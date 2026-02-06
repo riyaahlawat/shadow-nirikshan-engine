@@ -16,6 +16,6 @@ def compute_silence_baseline(
         .mean()
         .reset_index()
         .rename(columns={"usage": "baseline_usage"})
-    )
+    ) 
 
     return baseline

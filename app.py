@@ -1,13 +1,18 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime, timedelta
 
-from pipeline.ingestion import load_usage_logs, load_schedule
+from pipeline.ingestion import load_schedule
+from pipeline.scheduler import get_time_window
 from pipeline.silence_detection import mark_silence_windows
 from pipeline.baseline import compute_silence_baseline
 from pipeline.anomaly import detect_shadow_waste
 from pipeline.decision import generate_decision
 
 
+# ============================================================
+# Page config
+# ============================================================
 st.set_page_config(
     page_title="Shadow Nirikshan Engine",
     layout="wide"
@@ -18,70 +23,192 @@ st.subheader("Detecting Invisible Resource Waste During Inactivity")
 
 st.markdown(
     """
-    Shadow Nirikshan Engine is a **scheduled decision-support system**  
-    that detects *water and electricity waste* occurring during **periods of inactivity**.
+    **Shadow Nirikshan Engine** simulates a scheduled monitoring system
+    that detects *water and electricity waste* during **inactive periods**.
     """
 )
 
 st.divider()
 
-# Sidebar
-st.sidebar.header("Demo Controls")
-use_demo_data = st.sidebar.checkbox("Use demo data", value=True)
-run_analysis = st.sidebar.button("▶ Run Analysis Cycle")
 
-# Data loading
-if use_demo_data:
-    usage_path = "data/demo/usage_logs.csv"
-    schedule_path = "data/demo/schedule.csv"
-    historical_path = "data/demo/historical_logs.csv"
-else:
-    usage_file = st.sidebar.file_uploader("Upload usage logs CSV")
-    schedule_file = st.sidebar.file_uploader("Upload schedule CSV")
-    historical_file = st.sidebar.file_uploader("Upload historical logs CSV")
+# ============================================================
+# Session State Initialization
+# ============================================================
+if "usage_df" not in st.session_state:
+    usage_df = pd.read_csv("data/usage_logs_full.csv")
+    usage_df["timestamp"] = pd.to_datetime(usage_df["timestamp"])
+    st.session_state.usage_df = usage_df
 
-    if not (usage_file and schedule_file and historical_file):
-        st.info("Please upload all required CSV files.")
-        st.stop()
+    st.session_state.current_time = (
+        usage_df["timestamp"].min() + timedelta(minutes=30)
+    )
+    st.session_state.end_time = usage_df["timestamp"].max()
 
-    usage_path = usage_file
-    schedule_path = schedule_file
-    historical_path = historical_file
+if "cycle_count" not in st.session_state:
+    st.session_state.cycle_count = 0
+
+if "decision_history" not in st.session_state:
+    st.session_state.decision_history = []
+
+if "anomaly_history" not in st.session_state:
+    st.session_state.anomaly_history = []
 
 
-# Run analysis
-if run_analysis:
-    st.subheader("🔍 Analysis Results")
+# ============================================================
+# Sidebar Controls
+# ============================================================
+st.sidebar.header("⚙️ Simulation Controls")
 
-    # Load data
-    schedule = load_schedule(schedule_path)
+run_one_cycle = st.sidebar.button("▶ Run ONE Cycle (30 min)")
+run_one_day = st.sidebar.button("⏩ Run ALL Cycles (1 Day)")
 
-    historical = load_usage_logs(historical_path)
-    historical = mark_silence_windows(historical, schedule)
-    baseline = compute_silence_baseline(historical)
+st.sidebar.caption("Each cycle represents a scheduled 30-minute run")
 
-    current = load_usage_logs(usage_path)
-    current = mark_silence_windows(current, schedule)
-    result = detect_shadow_waste(current, baseline)
 
-    decisions = []
+# ============================================================
+# Load Schedule
+# ============================================================
+schedule = load_schedule("data/demo/schedule.csv")
+
+
+# ============================================================
+# Core Scheduler Function
+# ============================================================
+def run_single_cycle():
+
+    usage_df = st.session_state.usage_df
+    current_time = st.session_state.current_time
+
+    if current_time > st.session_state.end_time:
+        return False
+
+    # 1️⃣ Extract time window
+    window_df = get_time_window(
+        usage_df,
+        current_time,
+        window_minutes=30
+    )
+
+    if window_df.empty:
+        st.session_state.current_time += timedelta(minutes=30)
+        return True
+
+    # 2️⃣ Silence detection
+    window_df = mark_silence_windows(window_df, schedule)
+
+    # 3️⃣ Baseline from historical data
+    historical_df = usage_df[usage_df["timestamp"] < current_time]
+    historical_df = mark_silence_windows(historical_df, schedule)
+    baseline = compute_silence_baseline(historical_df)
+
+    # 4️⃣ Anomaly detection
+    result = detect_shadow_waste(window_df, baseline)
+    result["run_time"] = current_time
+
+    st.session_state.anomaly_history.append(result)
+
+    # 5️⃣ Decisions
+    st.session_state.cycle_count += 1
     for _, row in result.iterrows():
         if row["is_anomaly"]:
-            decisions.append(generate_decision(row))
+            decision = generate_decision(row)
+            decision["cycle"] = st.session_state.cycle_count
+            decision["run_time"] = current_time
+            st.session_state.decision_history.append(decision)
 
-    if not decisions:
-        st.success("No shadow waste detected in this cycle.")
+    # Advance time
+    st.session_state.current_time += timedelta(minutes=30)
+    return True
+
+
+# ============================================================
+# Button Actions
+# ============================================================
+if run_one_cycle:
+    success = run_single_cycle()
+    if success:
+        st.success("✅ One scheduled cycle executed.")
     else:
-        st.warning(f"{len(decisions)} shadow waste issue(s) detected.")
+        st.warning("⏹️ No more data to process.")
 
-        decision_df = pd.DataFrame(decisions)
-        st.dataframe(decision_df, use_container_width=True)
+if run_one_day:
+    start_time = st.session_state.current_time
+    end_of_day = start_time + timedelta(days=1)
 
-        st.markdown(
-            """
-            ### 🧠 What this means
-            - These issues occurred **when no activity was expected**
-            - Each row is an **actionable recommendation**, not just an alert
-            - This analysis represents **one scheduled cycle (e.g., 30 minutes)**
-            """
-        )
+    progress = st.progress(0)
+    steps = 0
+
+    while st.session_state.current_time <= end_of_day:
+        if not run_single_cycle():
+            break
+        steps += 1
+        progress.progress(min(steps / 48, 1.0))  # 48 cycles per day
+
+    st.success(f"✅ One full day simulated ({steps} cycles).")
+
+
+# ============================================================
+# Results & Analytics
+# ============================================================
+st.divider()
+st.header("📊 Simulation Results")
+
+if not st.session_state.decision_history:
+    st.info("Run one or more cycles to view results.")
+    st.stop()
+
+decision_df = pd.DataFrame(st.session_state.decision_history)
+
+
+# ---------------- KPI Metrics ----------------
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("Total Cycles Run", st.session_state.cycle_count)
+c2.metric("Total Decisions", len(decision_df))
+c3.metric("Buildings Impacted", decision_df["building"].nunique())
+c4.metric("Resources Tracked", decision_df["resource"].nunique())
+
+
+# ---------------- Decision Table ----------------
+st.subheader("📋 All Shadow Waste Decisions")
+st.dataframe(decision_df, use_container_width=True)
+
+
+# ---------------- Graphs ----------------
+st.subheader("🏢 Anomalies by Building")
+st.bar_chart(
+    decision_df.groupby("building").size().reset_index(name="count"),
+    x="building",
+    y="count"
+)
+
+st.subheader("💧⚡ Anomalies by Resource")
+st.bar_chart(
+    decision_df.groupby("resource").size().reset_index(name="count"),
+    x="resource",
+    y="count"
+)
+
+st.subheader("⏱️ Anomalies Across Cycles")
+st.line_chart(
+    decision_df.groupby("cycle").size().reset_index(name="count"),
+    x="cycle",
+    y="count"
+)
+
+st.subheader("🔥 Concentration of Shadow Waste")
+pivot = pd.pivot_table(
+    decision_df,
+    index="building",
+    columns="resource",
+    values="detected_issue",
+    aggfunc="count",
+    fill_value=0
+)
+
+st.dataframe(pivot, use_container_width=True)
+
+
+st.caption(
+    "All analytics are generated from simulated scheduled runs in this session."
+)

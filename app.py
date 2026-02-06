@@ -245,6 +245,104 @@ if run_one_day:
 
     st.success(f"✅ One full day simulated ({steps} cycles).")
 
+
+# Silence Comparison Graph of past 24 hours
+import altair as alt
+
+st.subheader("📊 Baseline vs Current Window Usage (All Buildings)")
+
+if st.session_state.anomaly_history:
+
+    current_df = st.session_state.anomaly_history[-1].copy()
+
+    # aggregate current window usage
+    current_agg = (
+        current_df
+        .groupby(["building", "resource", "is_silence"])["usage"]
+        .sum()
+        .reset_index()
+        .rename(columns={"usage": "current_window_usage"})
+    )
+
+    # choose baseline
+    if baseline_mode == "ML":
+        baseline_df = st.session_state.baseline_ml_df.copy()
+    else:
+        baseline_df = st.session_state.baseline_mean_df.copy()
+
+    compare_df = baseline_df.merge(
+        current_agg,
+        on=["building", "resource"],
+        how="left"
+    ).fillna({
+        "current_window_usage": 0,
+        "is_silence": False
+    })
+
+    compare_df["label"] = (
+        compare_df["building"] + "-" + compare_df["resource"]
+    )
+
+    # ---------- build plot dataset ----------
+
+    base_part = compare_df[[
+        "label", "baseline_usage"
+    ]].rename(columns={"baseline_usage": "usage"})
+    base_part["type"] = "baseline"
+    base_part["status"] = "baseline"
+
+    curr_part = compare_df[[
+        "label", "current_window_usage", "is_silence"
+    ]].rename(columns={"current_window_usage": "usage"})
+    curr_part["type"] = "current"
+    curr_part["status"] = curr_part["is_silence"].map(
+        {True: "silence", False: "normal"}
+    )
+
+    plot_long = pd.concat([
+        base_part[["label","usage","type","status"]],
+        curr_part[["label","usage","type","status"]]
+    ])
+
+    # ---------- color rule ----------
+
+    color_scale = alt.Scale(
+        domain=["baseline","silence","normal"],
+        range=["#4c78a8", "#e45756", "#54a24b"]  # blue, red, green
+    )
+
+    chart = alt.Chart(plot_long).mark_bar().encode(
+        x=alt.X("label:N", title="Building-Resource"),
+        xOffset="type:N",
+        y=alt.Y("usage:Q"),
+        color=alt.Color("status:N", scale=color_scale, title="Bar Type")
+    ).properties(height=350)
+
+    st.altair_chart(chart, use_container_width=True)
+
+    st.caption(
+        "Baseline shown in blue. Current window usage is red for scheduled silence windows and green for normal activity windows."
+    )
+
+    # ---------- collapsible table ----------
+
+    def color_status(val):
+        if val == True:
+            return "background-color:#ffd6d6"  # red tint
+        else:
+            return "background-color:#d6f5d6"  # green tint
+
+    with st.expander("📋 View plotted values"):
+        styled = compare_df.style.applymap(
+            color_status,
+            subset=["is_silence"]
+        )
+        st.dataframe(styled, use_container_width=True)
+
+else:
+    st.info("Run at least one cycle to view current window comparison.")
+
+
 # ============================================================
 # Results & Analytics
 # ============================================================

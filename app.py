@@ -382,27 +382,51 @@ with st.expander("📊 Collapsable Results", expanded=False):
 
     # ---------------- Graphs ----------------
     st.subheader("🏢 Anomalies by Building")
+
     if "building" in decision_df.columns:
+
         building_chart = (
             decision_df
             .groupby("building")
             .size()
             .reset_index(name="count")
         )
-        st.bar_chart(building_chart, x="building", y="count")
+
+        pie_building = alt.Chart(building_chart).mark_arc().encode(
+            theta="count:Q",
+            color="building:N",
+            tooltip=["building", "count"]
+        )
+
+        st.altair_chart(pie_building, use_container_width=True)
+
     else:
         st.info("No building-level anomaly data available yet.")
 
 
+
     st.subheader("💧⚡ Anomalies by Resource")
+
     if "resource" in decision_df.columns:
-        st.bar_chart(
-            decision_df.groupby("resource").size().reset_index(name="count"),
-            x="resource",
-            y="count"
+
+        resource_chart = (
+            decision_df
+            .groupby("resource")
+            .size()
+            .reset_index(name="count")
         )
+
+        pie_resource = alt.Chart(resource_chart).mark_arc().encode(
+            theta="count:Q",
+            color="resource:N",
+            tooltip=["resource", "count"]
+        )
+
+        st.altair_chart(pie_resource, use_container_width=True)
+
     else:
         st.info("No resource-level anomaly data available yet.")
+
 
     st.subheader("⏱️ Anomalies Across Cycles")
     if "cycle" in decision_df.columns:
